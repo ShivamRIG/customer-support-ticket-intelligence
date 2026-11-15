@@ -1,21 +1,19 @@
-# FILE: configs/config.py
-
 import os
+from pathlib import Path
 
-SEED = 42
+# Project root is 2 levels up from configs/config.py
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-MODEL_NAME = "distilbert/distilbert-base-multilingual-cased"
-MAX_LENGTH = 195
+# XGBoost Ticket Routing Paths
+TICKET_ROUTING_DIR = Path(
+    os.getenv(
+        "TICKET_ROUTING_DIR",
+        str(PROJECT_ROOT / "artifacts" / "ticket_routing_artifacts"),
+    )
+)
+QUEUE_MODEL_PATH = TICKET_ROUTING_DIR / "queue_classifier.joblib"
+PRIORITY_MODEL_PATH = TICKET_ROUTING_DIR / "priority_classifier.joblib"
+LE_QUEUE_PATH = TICKET_ROUTING_DIR / "le_queue.joblib"
+LE_PRIORITY_PATH = TICKET_ROUTING_DIR / "le_priority.joblib"
 
-DATA_PATH = "data/raw/tickets.csv"
-OUTPUT_BASE = "artifacts"
-OUTPUT_DIR = os.path.join(OUTPUT_BASE, "standard_distilbert")
-
-LEARNING_RATE = 2e-5
-TRAIN_BATCH_SIZE = 16
-EVAL_BATCH_SIZE = 32
-GRADIENT_ACCUMULATION_STEPS = 1
-NUM_TRAIN_EPOCHS = 4
-WEIGHT_DECAY = 0.01
-
-EARLY_STOPPING_PATIENCE = 2
+EMBEDDER_MODEL_NAME = os.getenv("EMBEDDER_MODEL_NAME", "all-MiniLM-L6-v2")
