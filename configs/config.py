@@ -16,4 +16,7 @@ PRIORITY_MODEL_PATH = TICKET_ROUTING_DIR / "priority_classifier.joblib"
 LE_QUEUE_PATH = TICKET_ROUTING_DIR / "le_queue.joblib"
 LE_PRIORITY_PATH = TICKET_ROUTING_DIR / "le_priority.joblib"
 
+
+OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", str(PROJECT_ROOT / "artifacts" / "evaluation")))
+
 EMBEDDER_MODEL_NAME = os.getenv("EMBEDDER_MODEL_NAME", "all-MiniLM-L6-v2")
