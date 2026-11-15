@@ -1,23 +1,38 @@
+
+# Python
 __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# Environment variables
 .env
+.env.*
+
+# Jupyter
 .ipynb_checkpoints/
+
+# Raw datasets
 data/raw/*
 !data/raw/.gitkeep
+
+# Model artifacts
 artifacts/*
 !artifacts/.gitkeep
-mlruns/
-.DS_Store
-# Model checkpoints
-artifacts/**/checkpoint-*/
 
 # Large model files
 *.safetensors
 *.pt
 *.pth
 *.bin
+*.onnx
+
+# Training checkpoints
+**/checkpoint-*/
 
 # Experiment tracking
 mlruns/
+
+# OS files
+.DS_Store
+Thumbs.db
