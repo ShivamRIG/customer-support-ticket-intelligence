@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.ipynb_checkpoints/
+data/raw/*
+!data/raw/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
+mlruns/
+.DS_Store
+# Model checkpoints
+artifacts/**/checkpoint-*/
+
+# Large model files
+*.safetensors
+*.pt
+*.pth
+*.bin
+
+# Experiment tracking
+mlruns/
