@@ -1,5 +1,3 @@
-# FILE: src/evaluation/evaluate.py
-
 import os
 import json
 
@@ -18,21 +16,29 @@ from configs.config import OUTPUT_DIR
 
 
 def evaluate_predictions(y_true, y_pred, class_names, output_dir=OUTPUT_DIR):
+    """
+    Evaluates predictions against true labels, prints metrics,
+    and saves reports, confusion matrix CSV, and plot images.
+    """
     os.makedirs(output_dir, exist_ok=True)
 
     metrics = {
-        "accuracy": accuracy_score(y_true, y_pred),
-        "macro_f1": f1_score(
-            y_true,
-            y_pred,
-            average="macro",
-            zero_division=0,
+        "accuracy": float(accuracy_score(y_true, y_pred)),
+        "macro_f1": float(
+            f1_score(
+                y_true,
+                y_pred,
+                average="macro",
+                zero_division=0,
+            )
         ),
-        "weighted_f1": f1_score(
-            y_true,
-            y_pred,
-            average="weighted",
-            zero_division=0,
+        "weighted_f1": float(
+            f1_score(
+                y_true,
+                y_pred,
+                average="weighted",
+                zero_division=0,
+            )
         ),
     }
 
@@ -85,8 +91,8 @@ def evaluate_predictions(y_true, y_pred, class_names, output_dir=OUTPUT_DIR):
         json.dump(metrics, f, indent=2)
 
     fig, ax = plt.subplots(figsize=(9, 5))
-    ax.imshow(matrix, interpolation="nearest")
-    ax.set_title("Support Queue Confusion Matrix")
+    ax.imshow(matrix, interpolation="nearest", cmap="Blues")
+    ax.set_title("Confusion Matrix")
     ax.set_xlabel("Predicted label")
     ax.set_ylabel("True label")
     ax.set_xticks(np.arange(len(class_names)))
@@ -99,6 +105,6 @@ def evaluate_predictions(y_true, y_pred, class_names, output_dir=OUTPUT_DIR):
         os.path.join(output_dir, "confusion_matrix.png"),
         dpi=150,
     )
-    plt.show()
+    plt.close(fig)
 
     return metrics
