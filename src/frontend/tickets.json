@@ -1,0 +1,26 @@
+[
+    {
+      "id": 1,
+      "subject": "Production DB connection timeout (504)",
+      "body": "Our primary Postgres pool is exhausted across EU-West nodes and webhook requests are failing with 503/504 gateway timeouts.",
+      "answer": "Checked container logs; upstream database unresponsive."
+    },
+    {
+      "id": 2,
+      "subject": "Duplicate invoice charge on annual plan",
+      "body": "We were billed twice on November 1st for our enterprise workspace renewal. Please refund the duplicate transaction immediately.",
+      "answer": ""
+    },
+    {
+      "id": 3,
+      "subject": "SSO Login failing with SAML 2.0 error",
+      "body": "Okta enterprise login throws an invalid signature assertion error for all users logging in via custom domain.",
+      "answer": "Certificate expiration verified in Okta dashboard."
+    },
+    {
+      "id": 4,
+      "subject": "API rate limit exceeded on mobile app endpoint",
+      "body": "Our iOS production client is hitting 429 Too Many Requests even though we are well under our 10,000 req/min quota.",
+      "answer": "Token bucket middleware reviewed."
+    }
+  ]

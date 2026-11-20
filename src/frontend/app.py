@@ -1,580 +1,361 @@
+import json
+from pathlib import Path
+import requests
 import streamlit as st
-import streamlit.components.v1 as components
 
 st.set_page_config(
-    page_title="TRIAGE.AI — Customer Support Intelligence",
+    page_title="TRIAGE.AI — Autonomous Support Intelligence",
     page_icon="🎫",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-st.markdown("""
-    <style>
-        #MainMenu, header, footer {visibility: hidden;}
-        .block-container {
-            padding: 0 !important;
-            max-width: 100% !important;
+# --- Load Tickets Dataset ---
+DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "tickets_dataset.json"
+try:
+    with open(DATA_PATH, "r", encoding="utf-8") as f:
+        TICKETS_DATA = json.load(f)
+except Exception:
+    # Fallback dataset if file is missing
+    TICKETS_DATA = [
+        {
+            "subject": "Production DB connection timeout (504)",
+            "body": "Our primary Postgres pool is exhausted across EU-West nodes and webhooks are failing.",
+            "answer": "Checked container logs; upstream database unresponsive."
+        },
+        {
+            "subject": "Duplicate invoice charge on annual plan",
+            "body": "We were billed twice on November 1st for our enterprise workspace renewal.",
+            "answer": ""
         }
-        iframe {
-            border: none;
-            width: 100%;
-            display: block;
-            overflow: hidden;
-        }
-    </style>
-""", unsafe_allow_html=True)
+    ]
 
-html_app = """
+# Initialize session index for cycling tickets
+if "ticket_index" not in st.session_state:
+    st.session_state["ticket_index"] = 0
+
+# Render the complete ORBAI-styled UI using st.html
+st.html("""
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TRIAGE.AI — Intelligent Support Routing</title>
+<title>TRIAGE.AI — Autonomous Support Routing</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
-    :root {
-        --bg: #f3f3f0;
-        --ink: #141413;
-        --muted: #666660;
-        --border: #dfdfd9;
-        --card: #ffffff;
-        --accent: #1d4ed8;
-        --urgent: #dc2626;
-    }
+  :root {
+    --bg: #070709;
+    --surface: rgba(255, 255, 255, 0.03);
+    --surface-hover: rgba(255, 255, 255, 0.06);
+    --border: rgba(255, 255, 255, 0.09);
+    --border-glow: rgba(139, 92, 246, 0.45);
+    --text-main: #f4f4f6;
+    --text-muted: #9ca3af;
+    --accent-1: #6366f1;
+    --accent-2: #a855f7;
+    --success: #10b981;
+    --danger: #ef4444;
+  }
 
-    * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-    }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    html {
-        scroll-behavior: smooth;
-    }
+  html {
+    scroll-behavior: smooth;
+    background-color: var(--bg);
+    color: var(--text-main);
+    font-family: 'Inter', sans-serif;
+  }
 
-    body {
-        background-color: var(--bg);
-        color: var(--ink);
-        font-family: 'Inter', sans-serif;
-        overflow-x: hidden;
-        line-height: 1.6;
-    }
+  body {
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+    line-height: 1.6;
+    padding-bottom: 4rem;
+  }
 
-    nav {
-        position: fixed;
-        top: 0;
-        width: 100%;
-        z-index: 100;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 1.25rem 3rem;
-        background: rgba(243, 243, 240, 0.9);
-        backdrop-filter: blur(12px);
-        border-bottom: 1px solid var(--border);
-    }
+  /* Architectural Grid Overlay */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 20%, #000 40%, transparent 100%);
+    pointer-events: none;
+    z-index: 0;
+  }
 
-    .logo {
-        font-weight: 800;
-        font-size: 1.1rem;
-        letter-spacing: -0.03em;
-    }
+  /* Glowing Orbs */
+  .orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(110px);
+    opacity: 0.38;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .orb-1 { width: 480px; height: 480px; background: var(--accent-1); top: -100px; left: 12%; }
+  .orb-2 { width: 420px; height: 420px; background: var(--accent-2); top: 150px; right: 10%; }
 
-    .nav-links {
-        display: flex;
-        gap: 2.5rem;
-        font-size: 0.85rem;
-        font-weight: 500;
-    }
+  main {
+    position: relative;
+    z-index: 1;
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+  }
 
-    .nav-links a {
-        text-decoration: none;
-        color: var(--muted);
-        transition: color 0.2s;
-    }
+  /* Hero */
+  .hero {
+    min-height: 75vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding-top: 5rem;
+    padding-bottom: 2rem;
+  }
 
-    .nav-links a:hover {
-        color: var(--ink);
-    }
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #c4b5fd;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    margin-bottom: 1.5rem;
+  }
 
-    .status-pill {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.75rem;
-        padding: 0.4rem 0.9rem;
-        border-radius: 999px;
-        background: var(--ink);
-        color: #fff;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
+  .hero h1 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: clamp(2.5rem, 5.5vw, 4.5rem);
+    font-weight: 800;
+    line-height: 1.08;
+    letter-spacing: -0.04em;
+    max-width: 820px;
+    background: linear-gradient(180deg, #ffffff 30%, #9ca3af 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 1.25rem;
+  }
 
-    .dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        background: #22c55e;
-    }
+  .hero p {
+    max-width: 580px;
+    color: var(--text-muted);
+    font-size: 1.05rem;
+    margin-bottom: 2rem;
+  }
 
-    .hero {
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        text-align: center;
-        padding: 9rem 2rem 5rem;
-        position: relative;
-    }
+  /* Bento Cards */
+  .bento-card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 2rem;
+    backdrop-filter: blur(14px);
+    margin-bottom: 2.5rem;
+  }
 
-    .eyebrow {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.18em;
-        color: var(--muted);
-        margin-bottom: 1rem;
-    }
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: #a78bfa;
+    margin-bottom: 0.5rem;
+  }
 
-    .hero-title {
-        font-weight: 800;
-        font-size: clamp(4rem, 12vw, 10rem);
-        line-height: 0.9;
-        letter-spacing: -0.04em;
-        text-transform: uppercase;
-        margin-bottom: 0.5rem;
-    }
+  .section-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: clamp(1.75rem, 3vw, 2.4rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    margin-bottom: 2rem;
+  }
 
-    .hero-serif {
-        font-family: 'Instrument Serif', serif;
-        font-style: italic;
-        font-size: clamp(2rem, 4vw, 3.5rem);
-        line-height: 1.1;
-        margin-bottom: 1.5rem;
-    }
+  .arch-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
 
-    .hero-desc {
-        max-width: 540px;
-        color: var(--muted);
-        font-size: 1.05rem;
-    }
+  @media (max-width: 800px) {
+    .arch-grid { grid-template-columns: 1fr; }
+  }
 
-    .float-item {
-        position: absolute;
-        background: rgba(255, 255, 255, 0.85);
-        backdrop-filter: blur(8px);
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        padding: 0.9rem 1.2rem;
-        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.04);
-        font-size: 0.8rem;
-        text-align: left;
-        z-index: 2;
-    }
+  .arch-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: #c4b5fd;
+    background: rgba(139, 92, 246, 0.14);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 8px;
+    margin-bottom: 0.85rem;
+  }
 
-    .float-1 { top: 25%; left: 8%; transform: rotate(-3deg); }
-    .float-2 { top: 28%; right: 8%; transform: rotate(2deg); }
-    .float-3 { bottom: 15%; left: 10%; transform: rotate(1deg); }
-    .float-4 { bottom: 18%; right: 10%; transform: rotate(-2deg); }
+  .bento-card h3 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+  }
 
-    .badge {
-        display: inline-block;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.65rem;
-        padding: 0.15rem 0.5rem;
-        border-radius: 4px;
-        background: #e5e7eb;
-        margin-bottom: 0.3rem;
-    }
+  .bento-card p {
+    color: var(--text-muted);
+    font-size: 0.92rem;
+  }
 
-    section {
-        max-width: 1160px;
-        margin: 0 auto;
-        padding: 6rem 2rem;
-        border-top: 1px solid var(--border);
-    }
-
-    .chapter-tag {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.75rem;
-        color: var(--muted);
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        margin-bottom: 0.75rem;
-    }
-
-    .section-heading {
-        font-size: clamp(2rem, 4vw, 3.2rem);
-        font-weight: 700;
-        letter-spacing: -0.03em;
-        margin-bottom: 2.5rem;
-    }
-
-    .demo-grid {
-        display: grid;
-        grid-template-columns: 1.2fr 1fr;
-        gap: 2rem;
-    }
-
-    @media (max-width: 850px) {
-        .demo-grid { grid-template-columns: 1fr; }
-        .float-item { display: none; }
-    }
-
-    .card {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 20px;
-        padding: 2.5rem;
-        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.03);
-    }
-
-    .field {
-        margin-bottom: 1.25rem;
-    }
-
-    label {
-        display: block;
-        font-size: 0.8rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--muted);
-        margin-bottom: 0.45rem;
-    }
-
-    input, textarea {
-        width: 100%;
-        padding: 0.85rem 1rem;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        font-family: 'Inter', sans-serif;
-        font-size: 0.95rem;
-        background: #fafaf8;
-        transition: border-color 0.2s, background 0.2s;
-    }
-
-    input:focus, textarea:focus {
-        outline: none;
-        border-color: var(--ink);
-        background: #fff;
-    }
-
-    button.primary-btn {
-        width: 100%;
-        padding: 1rem;
-        background: var(--ink);
-        color: #fff;
-        border: none;
-        border-radius: 10px;
-        font-weight: 600;
-        font-size: 0.95rem;
-        cursor: pointer;
-        transition: opacity 0.2s;
-    }
-
-    button.primary-btn:hover { opacity: 0.9; }
-
-    .result-box {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        height: 100%;
-    }
-
-    .metric-pair {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
-        margin-top: 1.5rem;
-    }
-
-    .metric {
-        background: #f8f8f6;
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        padding: 1.5rem;
-    }
-
-    .metric-label {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        color: var(--muted);
-    }
-
-    .metric-val {
-        font-size: 1.4rem;
-        font-weight: 700;
-        margin-top: 0.4rem;
-    }
-
-    .metric-conf {
-        font-size: 0.8rem;
-        color: var(--muted);
-        margin-top: 0.25rem;
-    }
-
-    .tabs {
-        display: flex;
-        gap: 0.75rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .tab-btn {
-        padding: 0.6rem 1.2rem;
-        border-radius: 999px;
-        border: 1px solid var(--border);
-        background: transparent;
-        font-size: 0.85rem;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-
-    .tab-btn.active {
-        background: var(--ink);
-        color: #fff;
-        border-color: var(--ink);
-    }
-
-    pre {
-        background: #141413;
-        color: #e5e5e0;
-        padding: 1.5rem;
-        border-radius: 12px;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.82rem;
-        overflow-x: auto;
-        margin-top: 1rem;
-    }
-
-    footer {
-        text-align: center;
-        padding: 4rem 2rem;
-        border-top: 1px solid var(--border);
-        color: var(--muted);
-        font-size: 0.85rem;
-    }
+  pre {
+    background: #040406;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.2rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: #d1d5db;
+    overflow-x: auto;
+    line-height: 1.6;
+    margin-top: 1rem;
+  }
 </style>
 </head>
 <body>
 
-<nav>
-    <div class="logo">TRIAGE.AI</div>
-    <div class="nav-links">
-        <a href="#companion">01 / Overview</a>
-        <a href="#demo">02 / Live Demo</a>
-        <a href="#cloud">03 / Cloud API</a>
-    </div>
-    <div class="status-pill"><span class="dot"></span> XGBoost v3.4.1</div>
-</nav>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
 
-<div class="hero">
-    <div class="float-item float-1">
-        <span class="badge">QUEUE: IT SUPPORT</span>
-        <div><strong>Jira 503 Gateway Error</strong></div>
-    </div>
-    <div class="float-item float-2">
-        <span class="badge" style="background:#fee2e2;color:#991b1b;">PRIORITY: HIGH</span>
-        <div><strong>Production DB Timeout</strong></div>
-    </div>
-    <div class="float-item float-3">
-        <span class="badge">EMBEDDING: 384-D</span>
-        <div><code>all-MiniLM-L6-v2</code></div>
-    </div>
-    <div class="float-item float-4">
-        <span class="badge" style="background:#dcfce7;color:#166534;">LATENCY: 24ms</span>
-        <div><strong>FastAPI Container</strong></div>
-    </div>
+<main>
+  <div class="hero">
+    <div class="hero-badge">Autonomous Support Intelligence • XGBoost + MiniLM-L6-v2</div>
+    <h1>Route every support ticket with precision.</h1>
+    <p>Real-time semantic embedding and dual-target gradient boosted classification engineered for high-throughput customer operations.</p>
+  </div>
+</main>
 
-    <div class="eyebrow">The art of intelligent routing</div>
-    <h1 class="hero-title">TRIAGE.AI</h1>
-    <div class="hero-serif">A little context. A lot of precision.</div>
-    <p class="hero-desc">
-        Automated support ticket classification powered by semantic sentence embeddings and dual-target gradient boosted decision trees.
-    </p>
-</div>
+</body>
+</html>
+""")
 
-<section id="companion">
-    <div class="chapter-tag">01 / The Architecture</div>
-    <h2 class="section-heading">Built for high-throughput support queues.</h2>
-    <div class="demo-grid" style="grid-template-columns: repeat(3, 1fr);">
-        <div class="card">
-            <div class="chapter-tag">Step 01</div>
-            <h3 style="margin-bottom:0.75rem;">Semantic Encoding</h3>
-            <p style="color:var(--muted); font-size:0.95rem;">
-                Ticket subject, body, and agent notes are transformed into 384-dimensional dense vectors using <code>all-MiniLM-L6-v2</code>.
-            </p>
-        </div>
-        <div class="card">
-            <div class="chapter-tag">Step 02</div>
-            <h3 style="margin-bottom:0.75rem;">Dual XGBoost Routing</h3>
-            <p style="color:var(--muted); font-size:0.95rem;">
-                Class-balanced histogram gradient boosters independently predict the target department queue and urgency tier.
-            </p>
-        </div>
-        <div class="card">
-            <div class="chapter-tag">Step 03</div>
-            <h3 style="margin-bottom:0.75rem;">Container Inference</h3>
-            <p style="color:var(--muted); font-size:0.95rem;">
-                Stateless FastAPI microservice packaged in Docker for horizontal scaling across AWS ECS and Azure Container Apps.
-            </p>
-        </div>
-    </div>
-</section>
+# --- STREAMLIT NATIVE INTERACTIVE SECTIONS (Keeping Exact Order) ---
 
-<section id="demo">
-    <div class="chapter-tag">02 / Interactive Inference</div>
-    <h2 class="section-heading">Live Ticket Triage Demo</h2>
-    <div class="demo-grid">
-        <div class="card">
-            <div class="field">
-                <label>FastAPI Endpoint URL</label>
-                <input type="text" id="apiUrl" value="http://127.0.0.1:8000/predict/triage">
-            </div>
-            <div class="field">
-                <label>Ticket Subject</label>
-                <input type="text" id="subject" placeholder="e.g., Cannot access Jira after upgrading to 8.20">
-            </div>
-            <div class="field">
-                <label>Ticket Body</label>
-                <textarea id="body" rows="4" placeholder="e.g., The Jira service throws a 503 error after our recent upgrade."></textarea>
-            </div>
-            <div class="field">
-                <label>Agent Notes (Optional)</label>
-                <input type="text" id="answer" placeholder="e.g., Checked container logs, upstream unresponsive.">
-            </div>
-            <button class="primary-btn" onclick="runTriage()">Run Triage Analysis →</button>
-        </div>
+st.divider()
 
-        <div class="card">
-            <div class="result-box" id="resultBox">
-                <div class="chapter-tag">Inference Output</div>
-                <h3>Awaiting Ticket Input</h3>
-                <p style="color:var(--muted); font-size:0.95rem; margin-top:0.5rem;">
-                    Enter ticket details on the left and execute the model to inspect predicted routing queues and priority confidence scores.
-                </p>
-            </div>
-        </div>
-    </div>
-</section>
+# Section 1: Live Triage Demo
+st.markdown("### 01 / Live Ticket Triage Demo")
+st.markdown("#### Interactive Inference Console")
 
-<section id="cloud">
-    <div class="chapter-tag">03 / Cloud & API Deployment</div>
-    <h2 class="section-heading">Containerized for AWS & Azure</h2>
-    <div class="card">
-        <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('aws', this)">AWS ECS / Fargate</button>
-            <button class="tab-btn" onclick="switchTab('azure', this)">Azure Container Apps</button>
-            <button class="tab-btn" onclick="switchTab('rest', this)">REST API Payload</button>
-        </div>
+col_input, col_output = st.columns([1.1, 1], gap="large")
 
-        <div id="tab-aws" class="tab-content">
-            <p style="color:var(--muted);">Push the Docker container image to Amazon ECR and deploy behind an Application Load Balancer using serverless AWS Fargate.</p>
-<pre>aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin &lt;account-id&gt;.dkr.ecr.us-east-1.amazonaws.com
-docker build -t ticket-triage-api .
-docker tag ticket-triage-api:latest &lt;account-id&gt;.dkr.ecr.us-east-1.amazonaws.com/ticket-triage-api:latest
-docker push &lt;account-id&gt;.dkr.ecr.us-east-1.amazonaws.com/ticket-triage-api:latest</pre>
-        </div>
+with col_input:
+    with st.container(border=True):
+        st.caption("JSON Dataset Cycling")
+        
+        # Cycling button that steps through tickets_dataset.json
+        if st.button("🔄 Load Next Ticket from JSON Dataset", use_container_width=True):
+            current_idx = st.session_state["ticket_index"]
+            ticket = TICKETS_DATA[current_idx]
+            
+            st.session_state["sub"] = ticket["subject"]
+            st.session_state["bod"] = ticket["body"]
+            st.session_state["ans"] = ticket.get("answer", "")
+            
+            # Advance index and loop back to start if at the end
+            st.session_state["ticket_index"] = (current_idx + 1) % len(TICKETS_DATA)
+            st.toast(f"Loaded ticket #{current_idx + 1} of {len(TICKETS_DATA)}", icon="📄")
 
-        <div id="tab-azure" class="tab-content" style="display:none;">
-            <p style="color:var(--muted);">Deploy to Azure Container Apps with external HTTP ingress on port 8000 and automatic scale-to-zero support.</p>
-<pre>az containerapp create \\
-  --name ticket-triage-api \\
-  --resource-group support-ml-rg \\
-  --environment triage-env \\
-  --image &lt;acr-name&gt;.azurecr.io/ticket-triage-api:latest \\
-  --target-port 8000 \\
-  --ingress external</pre>
-        </div>
+        with st.form("triage_form"):
+            subject = st.text_input("Ticket Subject *", value=st.session_state.get("sub", ""))
+            body = st.text_area("Ticket Body *", value=st.session_state.get("bod", ""), height=120)
+            answer = st.text_input("Agent Notes (Optional)", value=st.session_state.get("ans", ""))
+            submitted = st.form_submit_button("Run Triage Analysis →", type="primary", use_container_width=True)
 
-        <div id="tab-rest" class="tab-content" style="display:none;">
-            <p style="color:var(--muted);">Consume real-time predictions from Zendesk, Jira, or internal dashboards via standard HTTP POST.</p>
-<pre>curl -X POST "http://127.0.0.1:8000/predict/triage" \\
+with col_output:
+    with st.container(border=True):
+        st.markdown("##### Inference Output")
+        if submitted:
+            if not subject.strip() or not body.strip():
+                st.error("Please enter both a ticket subject and body.")
+            else:
+                with st.status("Running AI Triage Pipeline...", expanded=True) as status:
+                    st.write("Encoding text into 384-D semantic vector...")
+                    prog = st.progress(35)
+                    st.write("Evaluating dual XGBoost queue & priority classifiers...")
+                    prog.progress(80)
+
+                    try:
+                        res = requests.post(
+                            "http://127.0.0.1:8000/predict/triage",
+                            json={"subject": subject, "body": body, "answer": answer},
+                            timeout=10,
+                        )
+                        res.raise_for_status()
+                        data = res.json()
+                        prog.progress(100)
+                        status.update(label="Classification Complete", state="complete", expanded=False)
+
+                        mc1, mc2 = st.columns(2)
+                        q_conf = f"{data.get('queue_confidence', 0)*100:.1f}%" if data.get('queue_confidence') else "N/A"
+                        p_conf = f"{data.get('priority_confidence', 0)*100:.1f}%" if data.get('priority_confidence') else "N/A"
+                        mc1.metric("Suggested Queue", data.get("suggested_queue", "Unknown"), q_conf)
+                        mc2.metric("Suggested Priority", data.get("suggested_priority", "Unknown"), p_conf)
+
+                        with st.expander("View Raw JSON"):
+                            st.json(data)
+                    except Exception as e:
+                        status.update(label="Inference Failed", state="error", expanded=True)
+                        st.error(f"Could not reach FastAPI backend: {e}")
+        else:
+            st.info("Click **🔄 Load Next Ticket from JSON Dataset** above and click **Run Triage Analysis →**.")
+
+st.divider()
+
+# Section 2: Architecture
+st.markdown("### 02 / Architecture")
+st.markdown("#### Built for High-Throughput Support Queues")
+a1, a2, a3 = st.columns(3)
+with a1:
+    with st.container(border=True):
+        st.markdown("`STEP 01`\n### Semantic Encoding")
+        st.write("Ticket subject, body, and agent notes are transformed into 384-dimensional dense vectors using `all-MiniLM-L6-v2`.")
+with a2:
+    with st.container(border=True):
+        st.markdown("`STEP 02`\n### Dual XGBoost Routing")
+        st.write("Class-balanced histogram gradient boosters independently predict the target department queue and urgency tier.")
+with a3:
+    with st.container(border=True):
+        st.markdown("`STEP 03`\n### Container Inference")
+        st.write("Stateless FastAPI microservice packaged in a slim Docker image for instant horizontal scaling.")
+
+st.divider()
+
+# Section 3: Cloud & REST API
+st.markdown("### 03 / Cloud & REST API")
+st.markdown("#### Containerized for AWS & REST Integration")
+tab_aws, tab_rest = st.tabs(["AWS ECR / ECS", "REST API Payload"])
+with tab_aws:
+    st.code("""aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
+docker build -t ticket-intelligence-api:slim .
+docker tag ticket-intelligence-api:slim <account-id>.dkr.ecr.us-east-1.amazonaws.com/ticket-intelligence-api:slim
+docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/ticket-intelligence-api:slim""", language="bash")
+with tab_rest:
+    st.code("""curl -X POST "http://127.0.0.1:8000/predict/triage" \\
   -H "Content-Type: application/json" \\
   -d '{
     "subject": "Database connection timeout",
     "body": "Primary Postgres pool exhausted returning 504 errors.",
     "answer": ""
-  }'</pre>
-        </div>
-    </div>
-</section>
-
-<footer>
-    TRIAGE.AI — Customer Support Ticket Intelligence System
-</footer>
-
-<script>
-    function switchTab(tabId, btn) {
-        document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
-        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-        document.getElementById('tab-' + tabId).style.display = 'block';
-        btn.classList.add('active');
-    }
-
-    async function runTriage() {
-        const url = document.getElementById('apiUrl').value;
-        const subject = document.getElementById('subject').value.trim();
-        const body = document.getElementById('body').value.trim();
-        const answer = document.getElementById('answer').value.trim();
-        const resultBox = document.getElementById('resultBox');
-
-        if (!subject || !body) {
-            resultBox.innerHTML = `<div style="color:#dc2626; font-weight:600;">Please enter both a ticket subject and body.</div>`;
-            return;
-        }
-
-        resultBox.innerHTML = `<div style="color:var(--muted);">Running semantic embedding & XGBoost classification...</div>`;
-
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ subject, body, answer })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            const data = await response.json();
-            const qConf = data.queue_confidence ? (data.queue_confidence * 100).toFixed(1) + '%' : 'N/A';
-            const pConf = data.priority_confidence ? (data.priority_confidence * 100).toFixed(1) + '%' : 'N/A';
-
-            resultBox.innerHTML = `
-                <div class="chapter-tag" style="color:#16a34a;">● Classification Complete</div>
-                <h3>Routing Recommendation</h3>
-                <div class="metric-pair">
-                    <div class="metric">
-                        <div class="metric-label">Suggested Queue</div>
-                        <div class="metric-val">${data.suggested_queue}</div>
-                        <div class="metric-conf">Confidence: ${qConf}</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Suggested Priority</div>
-                        <div class="metric-val" style="color:#dc2626;">${data.suggested_priority}</div>
-                        <div class="metric-conf">Confidence: ${pConf}</div>
-                    </div>
-                </div>
-            `;
-        } catch (err) {
-            resultBox.innerHTML = `
-                <div style="color:#dc2626; font-weight:600; margin-bottom:0.5rem;">Connection Error</div>
-                <p style="color:var(--muted); font-size:0.9rem;">
-                    Could not reach <code>${url}</code>. Ensure FastAPI is running with CORS enabled (<code>uvicorn src.api.main:app --reload</code>).
-                </p>
-            `;
-        }
-    }
-</script>
-
-</body>
-</html>
-"""
-
-components.html(html_app, height=2200, scrolling=True)
+  }'""", language="bash")
