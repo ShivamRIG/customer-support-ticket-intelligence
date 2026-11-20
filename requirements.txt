@@ -17,4 +17,4 @@ xgboost
 scikit-learn
 joblib 
 matplotlib
-streamlit
+streamlit==1.45.1
