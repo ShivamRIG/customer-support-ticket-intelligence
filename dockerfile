@@ -37,4 +37,4 @@ COPY src/ ./src/
 
 EXPOSE 8000 8501
 
-CMD ["sh", "-c", "uvicorn src.api.main:app --host 0.0.0.0 --port 8000 & streamlit run src/frontend/app.py --server.port 8501 --server.address 0.0.0.0 --server.enableCORS false --server.enableXsrfProtection false --server.headless true"]
+CMD ["sh", "-eu", "-c", "uvicorn src.api.main:app --host 127.0.0.1 --port 8000 & API_PID=$!; streamlit run src/frontend/app.py --server.port ${PORT:-8080} --server.address 0.0.0.0 --server.enableCORS false --server.enableXsrfProtection false --server.headless true & UI_PID=$!; wait -n $API_PID $UI_PID"]
