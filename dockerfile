@@ -35,6 +35,6 @@ COPY configs/ ./configs/
 COPY artifacts/ ./artifacts/
 COPY src/ ./src/
 
-EXPOSE 8000 8501
+EXPOSE 8080 8000
 
-CMD ["sh", "-eu", "-c", "uvicorn src.api.main:app --host 127.0.0.1 --port 8000 & API_PID=$!; streamlit run src/frontend/app.py --server.port ${PORT:-8080} --server.address 0.0.0.0 --server.enableCORS false --server.enableXsrfProtection false --server.headless true & UI_PID=$!; wait -n $API_PID $UI_PID"]
+CMD ["sh", "-c", "set -eu; uvicorn src.api.main:app --host 127.0.0.1 --port 8000 & API_PID=$!; streamlit run src/frontend/app.py --server.port ${PORT:-8080} --server.address 0.0.0.0 --server.enableCORS false --server.enableXsrfProtection false --server.headless true & UI_PID=$!; while kill -0 $API_PID 2>/dev/null && kill -0 $UI_PID 2>/dev/null; do sleep 1; done; exit 1"]
